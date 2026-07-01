@@ -15,6 +15,15 @@ class ClassroomViewModel(private val repository: ClassroomRepository) : ViewMode
     private val _currentRole = MutableStateFlow("Teacher")
     val currentRole: StateFlow<String> = _currentRole.asStateFlow()
 
+    private val _loggedInUser = MutableStateFlow<UserEntity?>(null)
+    val loggedInUser: StateFlow<UserEntity?> = _loggedInUser.asStateFlow()
+
+    private val _loginError = MutableStateFlow<String?>(null)
+    val loginError: StateFlow<String?> = _loginError.asStateFlow()
+
+    private val _isLoggingIn = MutableStateFlow(false)
+    val isLoggingIn: StateFlow<Boolean> = _isLoggingIn.asStateFlow()
+
     private val _currentClassFilter = MutableStateFlow("class_physics")
     val currentClassFilter: StateFlow<String> = _currentClassFilter.asStateFlow()
 
@@ -50,6 +59,68 @@ class ClassroomViewModel(private val repository: ClassroomRepository) : ViewMode
         _currentRole.value = role
     }
 
+    fun login(email: String, password: String, onSuccess: (String) -> Unit) {
+        viewModelScope.launch {
+            _isLoggingIn.value = true
+            _loginError.value = null
+            // Artificial delay to simulate real network request securely
+            kotlinx.coroutines.delay(1000)
+            val user = repository.getUserByEmail(email.trim())
+            if (user != null) {
+                if (user.passwordHash == password) {
+                    _loggedInUser.value = user
+                    // Translate role options: "teacher" -> "Teacher", "student" -> "Student", "parent" -> "Parent"
+                    val mappedRole = when (user.role.lowercase()) {
+                        "teacher" -> "Teacher"
+                        "student" -> "Student"
+                        "parent" -> "Parent"
+                        else -> "Teacher"
+                    }
+                    _currentRole.value = mappedRole
+                    _isLoggingIn.value = false
+                    onSuccess(mappedRole)
+                } else {
+                    _loginError.value = "Incorrect password. Please try again."
+                    _isLoggingIn.value = false
+                }
+            } else {
+                _loginError.value = "User not found. Use pre-seeded email or Register."
+                _isLoggingIn.value = false
+            }
+        }
+    }
+
+    fun register(name: String, email: String, password: String, role: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            _isLoggingIn.value = true
+            _loginError.value = null
+            kotlinx.coroutines.delay(1000)
+
+            val existing = repository.getUserByEmail(email.trim())
+            if (existing != null) {
+                _loginError.value = "Email is already registered."
+                _isLoggingIn.value = false
+                return@launch
+            }
+
+            val newUser = UserEntity(
+                uid = UUID.randomUUID().toString(),
+                name = name.trim(),
+                email = email.trim(),
+                role = role.trim().lowercase(),
+                passwordHash = password
+            )
+            repository.insertUser(newUser)
+            _isLoggingIn.value = false
+            onSuccess()
+        }
+    }
+
+    fun logout() {
+        _loggedInUser.value = null
+        _loginError.value = null
+    }
+
     fun setClassFilter(classId: String) {
         _currentClassFilter.value = classId
     }
@@ -58,12 +129,99 @@ class ClassroomViewModel(private val repository: ClassroomRepository) : ViewMode
         _chatRoleFilter.value = filter
     }
 
+    fun parseTimeToMinutes(timeStr: String): Int? {
+        try {
+            val clean = timeStr.trim().uppercase()
+            val parts = clean.split(" ")
+            if (parts.size < 2) return null
+            val timePart = parts[0]
+            val amPm = parts[1]
+            val timeSplit = timePart.split(":")
+            if (timeSplit.size < 2) return null
+            var hour = timeSplit[0].toInt()
+            val minute = timeSplit[1].toInt()
+            if (amPm == "PM" && hour < 12) {
+                hour += 12
+            } else if (amPm == "AM" && hour == 12) {
+                hour = 0
+            }
+            return hour * 60 + minute
+        } catch (e: Exception) {
+            return null
+        }
+    }
+
+    fun checkRoutineConflict(classId: String, day: String, startTime: String, endTime: String, room: String, excludeItem: RoutineItem? = null): String? {
+        val startNew = parseTimeToMinutes(startTime) ?: return "Invalid Start Time format. Use e.g. '09:00 AM'"
+        val endNew = parseTimeToMinutes(endTime) ?: return "Invalid End Time format. Use e.g. '10:30 AM'"
+        if (startNew >= endNew) {
+            return "Start Time must be earlier than End Time."
+        }
+
+        classes.value.forEach { cls ->
+            cls.routine.forEach { r ->
+                if (excludeItem == null || excludeItem != r) {
+                    if (r.day.trim().lowercase() == day.trim().lowercase() && r.room.trim().lowercase() == room.trim().lowercase()) {
+                        val s = parseTimeToMinutes(r.startTime)
+                        val e = parseTimeToMinutes(r.endTime)
+                        if (s != null && e != null) {
+                            if (startNew < e && s < endNew) {
+                                return "Conflict: Room '$room' occupied on ${r.day} during ${r.startTime} - ${r.endTime} by '${cls.name}'."
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return null
+    }
+
     // Interactive Schedule Modifier
     fun addScheduleRoutine(classId: String, routineItem: RoutineItem) {
         viewModelScope.launch {
             val classEntity = classes.value.find { it.classId == classId } ?: return@launch
             val updatedRoutine = classEntity.routine + routineItem
             repository.insertClass(classEntity.copy(routine = updatedRoutine))
+        }
+    }
+
+    fun updateScheduleRoutine(classId: String, oldItem: RoutineItem, newItem: RoutineItem) {
+        viewModelScope.launch {
+            val classEntity = classes.value.find { it.classId == classId } ?: return@launch
+            val updatedRoutine = classEntity.routine.map { if (it == oldItem) newItem else it }
+            repository.insertClass(classEntity.copy(routine = updatedRoutine))
+        }
+    }
+
+    fun deleteScheduleRoutine(classId: String, routineItem: RoutineItem) {
+        viewModelScope.launch {
+            val classEntity = classes.value.find { it.classId == classId } ?: return@launch
+            val updatedRoutine = classEntity.routine.filter { it != routineItem }
+            repository.insertClass(classEntity.copy(routine = updatedRoutine))
+        }
+    }
+
+    fun addNewStudent(name: String, parentEmail: String, rollNumber: String, classId: String) {
+        viewModelScope.launch {
+            val studentId = if (rollNumber.isNotBlank()) rollNumber else "student_" + UUID.randomUUID().toString().take(6)
+            val existingStudent = repository.getStudentById(studentId)
+            if (existingStudent != null) {
+                if (!existingStudent.enrolledClasses.contains(classId)) {
+                    val updatedClasses = existingStudent.enrolledClasses + classId
+                    repository.insertStudent(existingStudent.copy(enrolledClasses = updatedClasses))
+                }
+            } else {
+                val newStudent = StudentEntity(
+                    studentId = studentId,
+                    name = name,
+                    parentEmail = parentEmail,
+                    enrolledClasses = listOf(classId),
+                    attendanceHistory = emptyList(),
+                    grades = emptyMap(),
+                    engagementScore = 80
+                )
+                repository.insertStudent(newStudent)
+            }
         }
     }
 
@@ -97,6 +255,59 @@ class ClassroomViewModel(private val repository: ClassroomRepository) : ViewMode
                 attendanceHistory = updatedHistory,
                 engagementScore = newEngagement
             ))
+        }
+    }
+
+    fun setAttendanceDirect(studentId: String, classId: String, dateString: String, status: String) {
+        viewModelScope.launch {
+            val student = students.value.find { it.studentId == studentId } ?: return@launch
+            val existingIndex = student.attendanceHistory.indexOfFirst { it.date == dateString && it.classId == classId }
+
+            val updatedHistory = student.attendanceHistory.toMutableList()
+            if (existingIndex >= 0) {
+                updatedHistory[existingIndex] = AttendanceRecord(dateString, classId, status)
+            } else {
+                updatedHistory.add(AttendanceRecord(dateString, classId, status))
+            }
+
+            // Recalculate Engagement Score dynamically
+            val presents = updatedHistory.count { it.status == "Present" }
+            val lates = updatedHistory.count { it.status == "Late" }
+            val total = updatedHistory.size
+            val attRate = if (total > 0) ((presents + lates * 0.7) / total * 100).toInt().coerceIn(0, 100) else 100
+            val newEngagement = ((attRate + student.engagementScore) / 2).coerceIn(40, 100)
+
+            repository.insertStudent(student.copy(
+                attendanceHistory = updatedHistory,
+                engagementScore = newEngagement
+            ))
+        }
+    }
+
+    fun markAllPresent(classId: String, dateString: String) {
+        viewModelScope.launch {
+            val classStudents = students.value.filter { it.enrolledClasses.contains(classId) }
+            classStudents.forEach { student ->
+                val existingIndex = student.attendanceHistory.indexOfFirst { it.date == dateString && it.classId == classId }
+                val updatedHistory = student.attendanceHistory.toMutableList()
+                if (existingIndex >= 0) {
+                    updatedHistory[existingIndex] = AttendanceRecord(dateString, classId, "Present")
+                } else {
+                    updatedHistory.add(AttendanceRecord(dateString, classId, "Present"))
+                }
+
+                // Recalculate Engagement Score dynamically
+                val presents = updatedHistory.count { it.status == "Present" }
+                val lates = updatedHistory.count { it.status == "Late" }
+                val total = updatedHistory.size
+                val attRate = if (total > 0) ((presents + lates * 0.7) / total * 100).toInt().coerceIn(0, 100) else 100
+                val newEngagement = ((attRate + student.engagementScore) / 2).coerceIn(40, 100)
+
+                repository.insertStudent(student.copy(
+                    attendanceHistory = updatedHistory,
+                    engagementScore = newEngagement
+                ))
+            }
         }
     }
 

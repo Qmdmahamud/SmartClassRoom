@@ -85,3 +85,13 @@ data class ReminderEntity(
     val content: String,
     val targetDate: Long
 )
+
+@Entity(tableName = "users")
+data class UserEntity(
+    @PrimaryKey val uid: String,
+    val name: String,
+    val email: String,
+    val role: String, // "teacher" | "student" | "parent"
+    val passwordHash: String // simplified for secure simulated auth
+)
+

@@ -39,6 +39,7 @@ import com.example.data.model.*
 import com.example.data.repository.ClassroomRepository
 import com.example.ui.ClassroomViewModel
 import com.example.ui.ClassroomViewModelFactory
+import com.example.ui.RoleBasedLoginScreen
 import com.example.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -83,6 +84,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainScreen(viewModel: ClassroomViewModel) {
     val context = LocalContext.current
+    val loggedInUser by viewModel.loggedInUser.collectAsStateWithLifecycle()
     val currentRole by viewModel.currentRole.collectAsStateWithLifecycle()
     val classes by viewModel.classes.collectAsStateWithLifecycle()
     val students by viewModel.students.collectAsStateWithLifecycle()
@@ -98,53 +100,65 @@ fun MainScreen(viewModel: ClassroomViewModel) {
         activeTab = 0
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        // Top Portal Brand Header and Role Switcher
-        AppHeader(
-            currentRole = currentRole,
-            onRoleSelected = { role ->
-                viewModel.switchRole(role)
-                Toast.makeText(context, "Role switched to $role View", Toast.LENGTH_SHORT).show()
-            }
+    if (loggedInUser == null) {
+        RoleBasedLoginScreen(
+            viewModel = viewModel,
+            onLoginSuccess = { _ -> }
         )
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            // Top Portal Brand Header and Role Switcher with Logout
+            AppHeader(
+                currentRole = currentRole,
+                loggedInUser = loggedInUser,
+                onRoleSelected = { role ->
+                    viewModel.switchRole(role)
+                    Toast.makeText(context, "Role switched to $role View", Toast.LENGTH_SHORT).show()
+                },
+                onLogout = {
+                    viewModel.logout()
+                    Toast.makeText(context, "Logged out successfully", Toast.LENGTH_SHORT).show()
+                }
+            )
 
-        Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-        // Role Specific Workspaces with dynamic layouts
-        Box(modifier = Modifier.weight(1f)) {
-            when (currentRole) {
-                "Teacher" -> TeacherWorkspace(
-                    activeTab = activeTab,
-                    onTabSelected = { activeTab = it },
-                    classes = classes,
-                    students = students,
-                    assignments = assignments,
-                    submissions = submissions,
-                    reminders = reminders,
-                    viewModel = viewModel
-                )
-                "Student" -> StudentWorkspace(
-                    activeTab = activeTab,
-                    onTabSelected = { activeTab = it },
-                    classes = classes,
-                    assignments = assignments,
-                    submissions = submissions,
-                    reminders = reminders,
-                    viewModel = viewModel
-                )
-                "Parent" -> ParentWorkspace(
-                    activeTab = activeTab,
-                    onTabSelected = { activeTab = it },
-                    classes = classes,
-                    students = students,
-                    assignments = assignments,
-                    submissions = submissions,
-                    viewModel = viewModel
-                )
+            // Role Specific Workspaces with dynamic layouts
+            Box(modifier = Modifier.weight(1f)) {
+                when (currentRole) {
+                    "Teacher" -> TeacherWorkspace(
+                        activeTab = activeTab,
+                        onTabSelected = { activeTab = it },
+                        classes = classes,
+                        students = students,
+                        assignments = assignments,
+                        submissions = submissions,
+                        reminders = reminders,
+                        viewModel = viewModel
+                    )
+                    "Student" -> StudentWorkspace(
+                        activeTab = activeTab,
+                        onTabSelected = { activeTab = it },
+                        classes = classes,
+                        assignments = assignments,
+                        submissions = submissions,
+                        reminders = reminders,
+                        viewModel = viewModel
+                    )
+                    "Parent" -> ParentWorkspace(
+                        activeTab = activeTab,
+                        onTabSelected = { activeTab = it },
+                        classes = classes,
+                        students = students,
+                        assignments = assignments,
+                        submissions = submissions,
+                        viewModel = viewModel
+                    )
+                }
             }
         }
     }
@@ -157,7 +171,9 @@ fun MainScreen(viewModel: ClassroomViewModel) {
 @Composable
 fun AppHeader(
     currentRole: String,
-    onRoleSelected: (String) -> Unit
+    loggedInUser: UserEntity?,
+    onRoleSelected: (String) -> Unit,
+    onLogout: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -173,7 +189,7 @@ fun AppHeader(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "${currentRole.uppercase()} WORKSPACE",
                         style = MaterialTheme.typography.labelSmall,
@@ -183,28 +199,61 @@ fun AppHeader(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "Cosmic Slate",
+                        text = loggedInUser?.name ?: "Sylhet Polytechnic Institute",
                         style = MaterialTheme.typography.displayMedium,
                         color = Color.White,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(1.dp))
+                    Text(
+                        text = loggedInUser?.email ?: "Unified Management & Portal Hub",
+                        color = TextGray,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(DeepCharcoal)
-                        .border(1.dp, MutedMolybdenum, RoundedCornerShape(14.dp)),
-                    contentAlignment = Alignment.Center
+                Spacer(modifier = Modifier.width(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("👤", fontSize = 20.sp)
-                    PulseDot(
+                    // Modern Logout Button
+                    IconButton(
+                        onClick = onLogout,
                         modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .offset(x = 2.dp, y = (-2).dp),
-                        color = CyanAura
-                    )
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(AlertRed.copy(alpha = 0.15f))
+                            .border(1.dp, AlertRed.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ExitToApp,
+                            contentDescription = "Sign Out",
+                            tint = AlertRed,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(DeepCharcoal)
+                            .border(1.dp, MutedMolybdenum, RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("👤", fontSize = 18.sp)
+                        PulseDot(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = 2.dp, y = (-2).dp),
+                            color = CyanAura
+                        )
+                    }
                 }
             }
 
@@ -213,7 +262,7 @@ fun AppHeader(
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = "Simulated Workspace Role:",
+                text = "Account Role Shortcuts:",
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextGray,
                 fontWeight = FontWeight.Medium
@@ -279,38 +328,6 @@ fun TeacherWorkspace(
     val tabs = listOf("Schedule", "Grading Hub", "Analytics", "Chat Feed")
 
     Column(modifier = Modifier.fillMaxSize()) {
-        ScrollableTabRow(
-            selectedTabIndex = activeTab,
-            containerColor = Color.Transparent,
-            edgePadding = 0.dp,
-            indicator = {},
-            divider = {}
-        ) {
-            tabs.forEachIndexed { index, title ->
-                val isSelected = activeTab == index
-                Tab(
-                    selected = isSelected,
-                    onClick = { onTabSelected(index) },
-                    modifier = Modifier
-                        .padding(horizontal = 4.dp, vertical = 6.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (isSelected) ElectricViolet.copy(alpha = 0.12f) else Color.Transparent)
-                        .border(1.dp, if (isSelected) ElectricViolet else Color.Transparent, RoundedCornerShape(12.dp))
-                        .height(38.dp),
-                    text = {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isSelected) ElectricViolet else TextGray
-                        )
-                    }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
         Box(modifier = Modifier.weight(1f)) {
             when (activeTab) {
                 0 -> TeacherScheduleTab(classes = classes, students = students, viewModel = viewModel)
@@ -319,6 +336,15 @@ fun TeacherWorkspace(
                 3 -> ChatScreen(viewModel = viewModel)
             }
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        WorkspaceBottomNavBar(
+            tabs = tabs,
+            activeTab = activeTab,
+            onTabSelected = onTabSelected,
+            activeColor = CyanAura
+        )
     }
 }
 
@@ -330,9 +356,10 @@ fun TeacherScheduleTab(
 ) {
     val activeClassFilter by viewModel.currentClassFilter.collectAsStateWithLifecycle()
     val activeClass = classes.find { it.classId == activeClassFilter }
-    val filteredStudents = students.filter { it.enrolledClasses.contains(activeClassFilter) }
+    val filteredStudents = students.filter { it.enrolledClasses.contains(activeClassFilter) }.sortedBy { it.name }
+    val context = LocalContext.current
 
-    var showAddRoutineDialog by remember { mutableStateOf(false) }
+    var showModifyRoutineDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -390,13 +417,16 @@ fun TeacherScheduleTab(
                                 style = MaterialTheme.typography.titleLarge,
                                 color = CyanAura
                             )
-                            IconButton(
-                                onClick = { showAddRoutineDialog = true },
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .background(ElectricViolet, RoundedCornerShape(8.dp))
+                            Button(
+                                onClick = { showModifyRoutineDialog = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier.height(36.dp)
                             ) {
-                                Icon(Icons.Default.Add, contentDescription = "Add Routine Slot", tint = Color.White)
+                                Icon(Icons.Default.Settings, contentDescription = "Modify Routine", tint = Color.White, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Modify Routine", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                         Spacer(modifier = Modifier.height(4.dp))
@@ -465,14 +495,191 @@ fun TeacherScheduleTab(
                 }
             }
 
+            // Roster: Add New Student Panel Card
+            item {
+                var showAddStudentPanel by remember { mutableStateOf(false) }
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = CosmicSlate),
+                    border = BorderStroke(1.dp, MutedMolybdenum),
+                    shape = RoundedCornerShape(24.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Default.PersonAdd, contentDescription = "Add Student", tint = CyanAura)
+                                Text(
+                                    text = "Roster: Add New Student",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = OffWhite,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            IconButton(
+                                onClick = { showAddStudentPanel = !showAddStudentPanel },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (showAddStudentPanel) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "Toggle Panel",
+                                    tint = TextGray
+                                )
+                            }
+                        }
+
+                        if (showAddStudentPanel) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            var studentName by remember { mutableStateOf("") }
+                            var parentEmail by remember { mutableStateOf("") }
+                            var rollNumber by remember { mutableStateOf("") }
+
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedTextField(
+                                    value = studentName,
+                                    onValueChange = { studentName = it },
+                                    label = { Text("Student Full Name") },
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = CyanAura,
+                                        focusedLabelColor = CyanAura,
+                                        cursorColor = CyanAura
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                OutlinedTextField(
+                                    value = parentEmail,
+                                    onValueChange = { parentEmail = it },
+                                    label = { Text("Parent Email Address") },
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = CyanAura,
+                                        focusedLabelColor = CyanAura,
+                                        cursorColor = CyanAura
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                OutlinedTextField(
+                                    value = rollNumber,
+                                    onValueChange = { rollNumber = it },
+                                    label = { Text("Roll / ID Number") },
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = CyanAura,
+                                        focusedLabelColor = CyanAura,
+                                        cursorColor = CyanAura
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Button(
+                                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = CyanAura),
+                                    shape = RoundedCornerShape(12.dp),
+                                    onClick = {
+                                        if (studentName.isNotBlank() && parentEmail.isNotBlank()) {
+                                            viewModel.addNewStudent(studentName, parentEmail, rollNumber, cls.classId)
+                                            Toast.makeText(context, "Student '$studentName' added and enrolled!", Toast.LENGTH_SHORT).show()
+                                            studentName = ""
+                                            parentEmail = ""
+                                            rollNumber = ""
+                                            showAddStudentPanel = false
+                                        } else {
+                                            Toast.makeText(context, "Name and Parent Email are required", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                ) {
+                                    Text("ADD STUDENT TO CLASS", color = DeepCharcoal, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Smart Attendance Logger Matrix
             item {
-                Text(
-                    text = "Smart Attendance Logger (2026-07-01 Today)",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = OffWhite,
-                    fontWeight = FontWeight.Bold
-                )
+                val totalStudents = filteredStudents.size
+                val presentCount = filteredStudents.count { s ->
+                    val record = s.attendanceHistory.find { it.date == "2026-07-01" && it.classId == cls.classId }
+                    record?.status == "Present"
+                }
+                val lateCount = filteredStudents.count { s ->
+                    val record = s.attendanceHistory.find { it.date == "2026-07-01" && it.classId == cls.classId }
+                    record?.status == "Late"
+                }
+                val absentCount = filteredStudents.count { s ->
+                    val record = s.attendanceHistory.find { it.date == "2026-07-01" && it.classId == cls.classId }
+                    val status = record?.status ?: "Absent"
+                    status == "Absent"
+                }
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Smart Attendance Logger (2026-07-01)",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = OffWhite,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Button(
+                            onClick = {
+                                viewModel.markAllPresent(cls.classId, "2026-07-01")
+                                Toast.makeText(context, "All students marked Present!", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = AlertGreen.copy(alpha = 0.15f)),
+                            border = BorderStroke(1.dp, AlertGreen),
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = "Mark All Present", tint = AlertGreen, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Mark All Present", color = AlertGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Live Counter Banner
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = CosmicSlate),
+                        border = BorderStroke(1.dp, MutedMolybdenum),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceAround,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Total", color = TextGray, style = MaterialTheme.typography.labelSmall)
+                                Text("$totalStudents", color = OffWhite, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            }
+                            Box(modifier = Modifier.width(1.dp).height(24.dp).background(MutedMolybdenum))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Present", color = AlertGreen, style = MaterialTheme.typography.labelSmall)
+                                Text("$presentCount", color = AlertGreen, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            }
+                            Box(modifier = Modifier.width(1.dp).height(24.dp).background(MutedMolybdenum))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Late", color = AlertOrange, style = MaterialTheme.typography.labelSmall)
+                                Text("$lateCount", color = AlertOrange, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            }
+                            Box(modifier = Modifier.width(1.dp).height(24.dp).background(MutedMolybdenum))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Absent", color = AlertRed, style = MaterialTheme.typography.labelSmall)
+                                Text("$absentCount", color = AlertRed, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
@@ -483,15 +690,16 @@ fun TeacherScheduleTab(
             } else {
                 items(filteredStudents) { student ->
                     val todayRecord = student.attendanceHistory.find { it.date == "2026-07-01" && it.classId == cls.classId }
-                    val status = todayRecord?.status ?: "Absent" // Default default is absent if unrecorded
+                    val status = todayRecord?.status ?: "Absent"
 
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = CosmicSlate),
-                        border = BorderStroke(1.dp, MutedMolybdenum)
+                        border = BorderStroke(1.dp, MutedMolybdenum),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                            modifier = Modifier.padding(14.dp).fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -509,31 +717,15 @@ fun TeacherScheduleTab(
                                 )
                             }
 
-                            // Cycle status: Present -> Late -> Absent -> Present
-                            Box(
-                                modifier = Modifier
-                                    .width(110.dp)
-                                    .height(44.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(
-                                        when (status) {
-                                            "Present" -> AlertGreen
-                                            "Late" -> AlertOrange
-                                            else -> AlertRed
-                                        }
-                                    )
-                                    .clickable {
-                                        viewModel.toggleAttendance(student.studentId, cls.classId, "2026-07-01")
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = status.uppercase(),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            AttendanceSegmentControl(
+                                currentStatus = status,
+                                onStatusSelected = { newStatus ->
+                                    viewModel.setAttendanceDirect(student.studentId, cls.classId, "2026-07-01", newStatus)
+                                },
+                                modifier = Modifier.width(160.dp)
+                            )
                         }
                     }
                 }
@@ -541,72 +733,237 @@ fun TeacherScheduleTab(
         }
     }
 
-    // Add Routine dialog
-    if (showAddRoutineDialog) {
-        var day by remember { mutableStateOf("Monday") }
-        var startTime by remember { mutableStateOf("10:00 AM") }
-        var endTime by remember { mutableStateOf("11:30 AM") }
-        var room by remember { mutableStateOf("Room 303") }
-        var platform by remember { mutableStateOf("Zoom") }
-        var link by remember { mutableStateOf("https://zoom.us/j/123") }
+    // Live Routine CRUD Modal
+    if (showModifyRoutineDialog) {
+        var editingRoutineItem by remember { mutableStateOf<RoutineItem?>(null) }
+        var showAddEditForm by remember { mutableStateOf(false) }
+
+        // Form fields
+        var day by remember { mutableStateOf("") }
+        var startTime by remember { mutableStateOf("") }
+        var endTime by remember { mutableStateOf("") }
+        var room by remember { mutableStateOf("") }
+        var platform by remember { mutableStateOf("") }
+        var link by remember { mutableStateOf("") }
 
         AlertDialog(
-            onDismissRequest = { showAddRoutineDialog = false },
+            onDismissRequest = { showModifyRoutineDialog = false },
             containerColor = CosmicSlate,
-            title = { Text("Add Routine Slot", color = CyanAura) },
+            title = {
+                Text(
+                    text = if (showAddEditForm) {
+                        if (editingRoutineItem != null) "Edit Routine Slot" else "Add Routine Slot"
+                    } else "Modify Routine",
+                    color = CyanAura,
+                    fontWeight = FontWeight.Bold
+                )
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = day,
-                        onValueChange = { day = it },
-                        label = { Text("Day of Week") }
-                    )
-                    OutlinedTextField(
-                        value = startTime,
-                        onValueChange = { startTime = it },
-                        label = { Text("Start Time") }
-                    )
-                    OutlinedTextField(
-                        value = endTime,
-                        onValueChange = { endTime = it },
-                        label = { Text("End Time") }
-                    )
-                    OutlinedTextField(
-                        value = room,
-                        onValueChange = { room = it },
-                        label = { Text("Room / Physical Hall") }
-                    )
-                    OutlinedTextField(
-                        value = platform,
-                        onValueChange = { platform = it },
-                        label = { Text("Platform (e.g. Meet, Zoom, Physical)") }
-                    )
-                    OutlinedTextField(
-                        value = link,
-                        onValueChange = { link = it },
-                        label = { Text("Join Link (Virtual sessions)") }
-                    )
+                if (showAddEditForm) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                    ) {
+                        OutlinedTextField(
+                            value = day,
+                            onValueChange = { day = it },
+                            label = { Text("Day of Week (e.g., Monday)") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyanAura,
+                                focusedLabelColor = CyanAura,
+                                cursorColor = CyanAura
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = startTime,
+                            onValueChange = { startTime = it },
+                            label = { Text("Start Time (e.g., 09:00 AM)") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyanAura,
+                                focusedLabelColor = CyanAura,
+                                cursorColor = CyanAura
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = endTime,
+                            onValueChange = { endTime = it },
+                            label = { Text("End Time (e.g., 10:30 AM)") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyanAura,
+                                focusedLabelColor = CyanAura,
+                                cursorColor = CyanAura
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = room,
+                            onValueChange = { room = it },
+                            label = { Text("Room / Physical Hall") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyanAura,
+                                focusedLabelColor = CyanAura,
+                                cursorColor = CyanAura
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = platform,
+                            onValueChange = { platform = it },
+                            label = { Text("Platform (e.g., Zoom, Google Meet)") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyanAura,
+                                focusedLabelColor = CyanAura,
+                                cursorColor = CyanAura
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = link,
+                            onValueChange = { link = it },
+                            label = { Text("Meeting Link") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyanAura,
+                                focusedLabelColor = CyanAura,
+                                cursorColor = CyanAura
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                } else {
+                    val routineList = activeClass?.routine ?: emptyList()
+                    if (routineList.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
+                            Text("No timeslots in routine.", color = TextGray)
+                        }
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 280.dp)
+                        ) {
+                            items(routineList) { r ->
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = DeepCharcoal),
+                                    border = BorderStroke(1.dp, MutedMolybdenum),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("${r.day} • ${r.startTime} - ${r.endTime}", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                            Text("Room: ${r.room} | ${r.platform}", color = TextGray, style = MaterialTheme.typography.labelSmall)
+                                        }
+                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            IconButton(
+                                                onClick = {
+                                                    editingRoutineItem = r
+                                                    day = r.day
+                                                    startTime = r.startTime
+                                                    endTime = r.endTime
+                                                    room = r.room
+                                                    platform = r.platform
+                                                    link = r.link
+                                                    showAddEditForm = true
+                                                },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(Icons.Default.Edit, contentDescription = "Edit", tint = CyanAura, modifier = Modifier.size(18.dp))
+                                            }
+                                            IconButton(
+                                                onClick = {
+                                                    activeClass?.let { cls ->
+                                                        viewModel.deleteScheduleRoutine(cls.classId, r)
+                                                        Toast.makeText(context, "Timeslot deleted", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = AlertRed, modifier = Modifier.size(18.dp))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
-                Button(
-                    colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
-                    onClick = {
-                        activeClassFilter.let { classId ->
-                            viewModel.addScheduleRoutine(
-                                classId,
-                                RoutineItem(day, startTime, endTime, room, platform, link)
-                            )
+                if (showAddEditForm) {
+                    Button(
+                        colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
+                        onClick = {
+                            if (day.isNotBlank() && startTime.isNotBlank() && endTime.isNotBlank()) {
+                                activeClass?.let { cls ->
+                                    val conflictError = viewModel.checkRoutineConflict(
+                                        classId = cls.classId,
+                                        day = day,
+                                        startTime = startTime,
+                                        endTime = endTime,
+                                        room = room,
+                                        excludeItem = editingRoutineItem
+                                    )
+                                    if (conflictError != null) {
+                                        Toast.makeText(context, conflictError, Toast.LENGTH_LONG).show()
+                                    } else {
+                                        val newItem = RoutineItem(day, startTime, endTime, room, platform, link)
+                                        val oldItem = editingRoutineItem
+                                        if (oldItem != null) {
+                                            viewModel.updateScheduleRoutine(cls.classId, oldItem, newItem)
+                                            Toast.makeText(context, "Timeslot updated", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            viewModel.addScheduleRoutine(cls.classId, newItem)
+                                            Toast.makeText(context, "Timeslot added", Toast.LENGTH_SHORT).show()
+                                        }
+                                        showAddEditForm = false
+                                        editingRoutineItem = null
+                                    }
+                                }
+                            } else {
+                                Toast.makeText(context, "Day, Start Time and End Time are required", Toast.LENGTH_SHORT).show()
+                            }
                         }
-                        showAddRoutineDialog = false
+                    ) {
+                        Text("Save")
                     }
-                ) {
-                    Text("Add Slot")
+                } else {
+                    Button(
+                        colors = ButtonDefaults.buttonColors(containerColor = CyanAura),
+                        onClick = {
+                            editingRoutineItem = null
+                            day = "Monday"
+                            startTime = "10:00 AM"
+                            endTime = "11:30 AM"
+                            room = "Room 303"
+                            platform = "Zoom"
+                            link = "https://zoom.us/j/123"
+                            showAddEditForm = true
+                        }
+                    ) {
+                        Text("Add New Slot", color = DeepCharcoal, fontWeight = FontWeight.Bold)
+                    }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAddRoutineDialog = false }) {
-                    Text("Cancel", color = TextGray)
+                if (showAddEditForm) {
+                    TextButton(
+                        onClick = {
+                            showAddEditForm = false
+                            editingRoutineItem = null
+                        }
+                    ) {
+                        Text("Back", color = TextGray)
+                    }
+                } else {
+                    TextButton(onClick = { showModifyRoutineDialog = false }) {
+                        Text("Close", color = TextGray)
+                    }
                 }
             }
         )
@@ -997,38 +1354,6 @@ fun StudentWorkspace(
     val tabs = listOf("Live Launchpad", "Homework Vault", "Classroom Chat")
 
     Column(modifier = Modifier.fillMaxSize()) {
-        ScrollableTabRow(
-            selectedTabIndex = activeTab,
-            containerColor = Color.Transparent,
-            edgePadding = 0.dp,
-            indicator = {},
-            divider = {}
-        ) {
-            tabs.forEachIndexed { index, title ->
-                val isSelected = activeTab == index
-                Tab(
-                    selected = isSelected,
-                    onClick = { onTabSelected(index) },
-                    modifier = Modifier
-                        .padding(horizontal = 4.dp, vertical = 6.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (isSelected) CyanAura.copy(alpha = 0.12f) else Color.Transparent)
-                        .border(1.dp, if (isSelected) CyanAura else Color.Transparent, RoundedCornerShape(12.dp))
-                        .height(38.dp),
-                    text = {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isSelected) CyanAura else TextGray
-                        )
-                    }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
         Box(modifier = Modifier.weight(1f)) {
             when (activeTab) {
                 0 -> StudentLaunchpadTab(classes = classes, reminders = reminders)
@@ -1036,6 +1361,15 @@ fun StudentWorkspace(
                 2 -> ChatScreen(viewModel = viewModel)
             }
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        WorkspaceBottomNavBar(
+            tabs = tabs,
+            activeTab = activeTab,
+            onTabSelected = onTabSelected,
+            activeColor = ElectricViolet
+        )
     }
 }
 
@@ -1074,7 +1408,7 @@ fun StudentLaunchpadTab(
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = CardDefaults.cardColors(containerColor = CosmicSlate),
-                                border = BorderStroke(1.dp, MutedMolybdenum),
+                                border = BorderStroke(2.dp, CyanAura),
                                 shape = RoundedCornerShape(28.dp)
                             ) {
                                 Column(modifier = Modifier.padding(20.dp)) {
@@ -1128,18 +1462,33 @@ fun StudentLaunchpadTab(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         OverlappingAvatars()
-                                        Button(
-                                            modifier = Modifier.height(42.dp),
-                                            colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
-                                            shape = RoundedCornerShape(12.dp),
-                                            onClick = {
-                                                Toast.makeText(context, "Redirecting deep-link to ${r.platform} Client...", Toast.LENGTH_SHORT).show()
+                                        Text(
+                                            text = "Active Now",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = TextGray
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(14.dp))
+                                    Button(
+                                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = CyanAura),
+                                        shape = RoundedCornerShape(12.dp),
+                                        onClick = {
+                                            if (r.link.isNotBlank()) {
+                                                try {
+                                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(r.link))
+                                                    context.startActivity(intent)
+                                                } catch (e: Exception) {
+                                                    Toast.makeText(context, "Redirecting deep-link to ${r.platform}...", Toast.LENGTH_SHORT).show()
+                                                }
+                                            } else {
+                                                Toast.makeText(context, "No meeting link configured for this routine slot.", Toast.LENGTH_SHORT).show()
                                             }
-                                        ) {
-                                            Text("ENTER PORTAL", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Icon(Icons.Default.ArrowForward, contentDescription = "Enter", tint = Color.White, modifier = Modifier.size(16.dp))
                                         }
+                                    ) {
+                                        Text("JOIN CLASS NOW", color = DeepCharcoal, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Icon(Icons.Default.ArrowForward, contentDescription = "Enter", tint = DeepCharcoal, modifier = Modifier.size(16.dp))
                                     }
                                 }
                             }
@@ -1430,38 +1779,6 @@ fun ParentWorkspace(
     val tabs = listOf("Overview & Grades", "Quick-Ping Teacher", "Global Feed")
 
     Column(modifier = Modifier.fillMaxSize()) {
-        ScrollableTabRow(
-            selectedTabIndex = activeTab,
-            containerColor = Color.Transparent,
-            edgePadding = 0.dp,
-            indicator = {},
-            divider = {}
-        ) {
-            tabs.forEachIndexed { index, title ->
-                val isSelected = activeTab == index
-                Tab(
-                    selected = isSelected,
-                    onClick = { onTabSelected(index) },
-                    modifier = Modifier
-                        .padding(horizontal = 4.dp, vertical = 6.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (isSelected) ElectricViolet.copy(alpha = 0.12f) else Color.Transparent)
-                        .border(1.dp, if (isSelected) ElectricViolet else Color.Transparent, RoundedCornerShape(12.dp))
-                        .height(38.dp),
-                    text = {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isSelected) ElectricViolet else TextGray
-                        )
-                    }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
         Box(modifier = Modifier.weight(1f)) {
             when (activeTab) {
                 0 -> ParentOverviewTab(students = students, assignments = assignments, submissions = submissions)
@@ -1469,6 +1786,15 @@ fun ParentWorkspace(
                 2 -> ChatScreen(viewModel = viewModel)
             }
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        WorkspaceBottomNavBar(
+            tabs = tabs,
+            activeTab = activeTab,
+            onTabSelected = onTabSelected,
+            activeColor = ElectricViolet
+        )
     }
 }
 
@@ -2108,5 +2434,136 @@ fun extractTimeBadge(timeStr: String): String {
         "$cleanHour$ampm"
     } catch (e: Exception) {
         "12PM"
+    }
+}
+
+@Composable
+fun AttendanceSegmentControl(
+    currentStatus: String,
+    onStatusSelected: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(DeepCharcoal)
+            .border(1.dp, MutedMolybdenum, RoundedCornerShape(12.dp))
+            .padding(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        listOf("Present", "Late", "Absent").forEach { status ->
+            val isSelected = currentStatus == status
+            val activeBg = when (status) {
+                "Present" -> AlertGreen
+                "Late" -> AlertOrange
+                else -> AlertRed
+            }
+            val activeTextColor = Color.White
+            val inactiveTextColor = TextGray
+
+            val scale by animateFloatAsState(
+                targetValue = if (isSelected) 1.05f else 1.0f,
+                animationSpec = spring(stiffness = Spring.StiffnessLow),
+                label = "status_scale"
+            )
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(38.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (isSelected) activeBg else Color.Transparent)
+                    .clickable { onStatusSelected(status) }
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .padding(horizontal = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = when(status) {
+                        "Present" -> "Pres"
+                        "Late" -> "Late"
+                        else -> "Abs"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isSelected) activeTextColor else inactiveTextColor,
+                    fontSize = 11.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun WorkspaceBottomNavBar(
+    tabs: List<String>,
+    activeTab: Int,
+    onTabSelected: (Int) -> Unit,
+    activeColor: Color = ElectricViolet
+) {
+    Surface(
+        color = CosmicSlate,
+        tonalElevation = 8.dp,
+        border = BorderStroke(1.dp, MutedMolybdenum),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp, horizontal = 16.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            tabs.forEachIndexed { index, title ->
+                val isSelected = activeTab == index
+                val icon = when (title) {
+                    "Schedule", "Live Launchpad" -> Icons.Default.Schedule
+                    "Grading Hub", "Homework Vault" -> Icons.Default.Assignment
+                    "Analytics", "Overview & Grades" -> Icons.Default.Analytics
+                    "Chat Feed", "Classroom Chat", "Quick-Ping Teacher", "Global Feed" -> Icons.Default.Chat
+                    else -> Icons.Default.Home
+                }
+
+                val scale by animateFloatAsState(
+                    targetValue = if (isSelected) 1.08f else 1.0f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                    label = "tab_scale"
+                )
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onTabSelected(index) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = title,
+                        tint = if (isSelected) activeColor else TextGray,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) activeColor else TextGray,
+                        maxLines = 1,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+        }
     }
 }

@@ -12,9 +12,10 @@ import com.example.data.model.*
         AssignmentEntity::class,
         SubmissionEntity::class,
         MessageEntity::class,
-        ReminderEntity::class
+        ReminderEntity::class,
+        UserEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

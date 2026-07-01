@@ -13,6 +13,7 @@ class ClassroomRepository(private val dao: ClassroomDao) {
     val allSubmissions: Flow<List<SubmissionEntity>> = dao.getAllSubmissions()
     val allMessages: Flow<List<MessageEntity>> = dao.getAllMessages()
     val allReminders: Flow<List<ReminderEntity>> = dao.getAllReminders()
+    val allUsers: Flow<List<UserEntity>> = dao.getAllUsers()
 
     suspend fun insertClass(classEntity: ClassEntity) = dao.insertClass(classEntity)
     suspend fun insertStudent(student: StudentEntity) = dao.insertStudent(student)
@@ -20,8 +21,11 @@ class ClassroomRepository(private val dao: ClassroomDao) {
     suspend fun insertSubmission(submission: SubmissionEntity) = dao.insertSubmission(submission)
     suspend fun insertMessage(message: MessageEntity) = dao.insertMessage(message)
     suspend fun insertReminder(reminder: ReminderEntity) = dao.insertReminder(reminder)
+    suspend fun insertUser(user: UserEntity) = dao.insertUser(user)
 
     suspend fun getStudentById(studentId: String): StudentEntity? = dao.getStudentById(studentId)
+    suspend fun getUserByEmail(email: String): UserEntity? = dao.getUserByEmail(email)
+    suspend fun getUserById(uid: String): UserEntity? = dao.getUserById(uid)
 
     suspend fun seedDatabase() {
         val currentClasses = allClasses.first()
@@ -302,5 +306,31 @@ class ClassroomRepository(private val dao: ClassroomDao) {
             )
         )
         dao.insertReminders(reminders)
+
+        // Seed Users
+        val users = listOf(
+            UserEntity(
+                uid = "uid_teacher_vance",
+                name = "Dr. Elizabeth Vance",
+                email = "teacher@example.com",
+                role = "teacher",
+                passwordHash = "password123"
+            ),
+            UserEntity(
+                uid = "uid_student_liam",
+                name = "Liam Carter",
+                email = "student@example.com",
+                role = "student",
+                passwordHash = "password123"
+            ),
+            UserEntity(
+                uid = "uid_parent_robert",
+                name = "Robert Carter",
+                email = "parent@example.com",
+                role = "parent",
+                passwordHash = "password123"
+            )
+        )
+        dao.insertUsers(users)
     }
 }
