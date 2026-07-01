@@ -1,0 +1,6 @@
+{
+  "appId": "com.aistudio.smartclassroom.wypnz",
+  "appName": "Smart Classroom",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Smart Classroom",
+  "description": "Multi-role academic portal for Teachers, Students, and Parents featuring schedule routines, rapid attendance, homework submissions, and parent-teacher communication with full analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
